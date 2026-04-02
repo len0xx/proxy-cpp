@@ -1,4 +1,4 @@
-# cpp-proxy
+# proxy-cpp
 
 A lightweight, multithreaded HTTP/HTTPS forward proxy written in modern C++20 using Boost.Beast and Boost.Asio. Supports HTTP forwarding and HTTPS CONNECT tunneling with bcrypt-hashed password authentication.
 
@@ -21,7 +21,7 @@ A lightweight, multithreaded HTTP/HTTPS forward proxy written in modern C++20 us
 
 ```
 .
-├── main-proxy.cpp       # Proxy source
+├── main.cpp       # Proxy source
 ├── CMakeLists.txt       # CMake build definition
 ├── Dockerfile           # Multi-stage Docker build (Ubuntu 24.04)
 ├── docker-compose.yml   # Compose with healthcheck + log rotation
@@ -109,8 +109,8 @@ docker run -d \
 Create a `.env` file with healthcheck credentials:
 
 ```bash
-PROXY_HC_USER=healthcheck
-PROXY_HC_PASS=your-healthcheck-password
+PROXY_USER=healthcheck
+PROXY_PASS=your-healthcheck-password
 ```
 
 Add the healthcheck user to `users.bcrypt`:
