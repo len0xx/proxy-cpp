@@ -170,6 +170,5 @@ curl -s -x http://alice:mypassword@127.0.0.1:3128 http://httpbin.org/headers \
 - `crypt_r(3)` is used instead of `crypt(3)` to keep verification **thread-safe** (stack-allocated `crypt_data`)
 - Hash comparison uses a **constant-time loop** to prevent timing side-channel attacks
 - `Proxy-Authorization` headers are **stripped** from all forwarded requests
-- The Docker image runs with `cap_drop: ALL`, `read_only: true`, and `no-new-privileges:true`
 - The `.env` file containing healthcheck credentials should **never be committed** to version control — add it to `.gitignore`
 

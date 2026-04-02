@@ -1,6 +1,7 @@
 services:
   proxy:
     image: proxy-cpp
+    restart: unless-stopped
     volumes:
       - ./proxy.conf:/etc/proxy-cpp/proxy.conf
       - ./users.auth:/etc/proxy-cpp/users.auth
@@ -25,5 +26,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 5s
-
+    environment:
+      - TZ=UTC
 
