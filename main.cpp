@@ -22,6 +22,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <crypt.h>
 
 namespace asio  = boost::asio;
 namespace beast = boost::beast;
@@ -33,6 +34,7 @@ using namespace std::chrono_literals;
 struct Config {
     std::string listen = "0.0.0.0";
     std::uint16_t port = 3128;
+    std::string password_file;
     std::unordered_map<std::string, std::string> users;
 };
 
@@ -218,6 +220,86 @@ static tcp::socket connect_with_timeout_posix(
     throw std::system_error(last_errno, std::generic_category(), "connect");
 }
 
+static bool is_bcrypt_hash(std::string_view hash) {
+    return boost::starts_with(hash, "$2a$") ||
+           boost::starts_with(hash, "$2b$") ||
+           boost::starts_with(hash, "$2y$");
+}
+
+static std::unordered_map<std::string, std::string>
+load_password_file(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) {
+        throw std::runtime_error("cannot open password file: " + path);
+    }
+
+    std::unordered_map<std::string, std::string> users;
+    std::string line;
+    std::size_t line_no = 0;
+
+    while (std::getline(in, line)) {
+        ++line_no;
+        line = trim(line);
+
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+
+        auto colon = line.find(':');
+        if (colon == std::string::npos) {
+            throw std::runtime_error(
+                "invalid password file entry at line " + std::to_string(line_no)
+            );
+        }
+
+        std::string user = trim(line.substr(0, colon));
+        std::string hash = trim(line.substr(colon + 1));
+
+        if (user.empty() || hash.empty()) {
+            throw std::runtime_error(
+                "empty username or hash at line " + std::to_string(line_no)
+            );
+        }
+
+        if (!is_bcrypt_hash(hash)) {
+            throw std::runtime_error(
+                "password for user '" + user + "' is not a bcrypt hash"
+            );
+        }
+
+        auto [it, inserted] = users.emplace(std::move(user), std::move(hash));
+        if (!inserted) {
+            throw std::runtime_error(
+                "duplicate username in password file at line " + std::to_string(line_no)
+            );
+        }
+    }
+
+    return users;
+}
+
+static bool verify_bcrypt_password(
+    std::string_view password,
+    std::string_view bcrypt_hash
+) {
+    if (!is_bcrypt_hash(bcrypt_hash)) {
+        return false;
+    }
+
+    struct crypt_data data {};
+    data.initialized = 0;
+
+    std::string pwd(password);
+    std::string hash(bcrypt_hash);
+
+    char* out = ::crypt_r(pwd.c_str(), hash.c_str(), &data);
+    if (!out) {
+        return false;
+    }
+
+    return hash == out;
+}
+
 static Config load_config(const std::string& path) {
     Config cfg;
     std::ifstream in(path);
@@ -248,17 +330,27 @@ static Config load_config(const std::string& path) {
             cfg.listen = val;
         } else if (key == "port") {
             cfg.port = static_cast<std::uint16_t>(std::stoul(val));
+        } else if (key == "password_file") {
+            cfg.password_file = val;
         } else if (key == "user") {
-            auto colon = val.find(':');
-            if (colon == std::string::npos) {
-                throw std::runtime_error("invalid user entry at line " + std::to_string(line_no));
-            }
-            cfg.users[val.substr(0, colon)] = val.substr(colon + 1);
+            throw std::runtime_error(
+                "plaintext 'user=' entries are not supported; use password_file"
+            );
         } else {
             throw std::runtime_error(
                 "unknown config key at line " + std::to_string(line_no) + ": " + key
             );
         }
+    }
+
+    if (cfg.password_file.empty()) {
+        throw std::runtime_error("password_file must be set in proxy.conf");
+    }
+
+    cfg.users = load_password_file(cfg.password_file);
+
+    if (cfg.users.empty()) {
+        throw std::runtime_error("password file contains no users");
     }
 
     return cfg;
@@ -305,7 +397,7 @@ static std::string base64_decode(std::string_view input) {
 }
 
 static std::optional<std::pair<std::string, std::string>>
-extract_basic_credentials(const http::request<http::dynamic_body>& req) {
+extract_basic_credentials(const http::request<http::string_body>& req) {
     auto it = req.find(http::field::proxy_authorization);
     if (it == req.end()) {
         return std::nullopt;
@@ -331,14 +423,18 @@ extract_basic_credentials(const http::request<http::dynamic_body>& req) {
     return std::make_pair(decoded.substr(0, colon), decoded.substr(colon + 1));
 }
 
-static bool authorized(const http::request<http::dynamic_body>& req, const Config& cfg) {
+static bool authorized(const http::request<http::string_body>& req, const Config& cfg) {
     auto creds = extract_basic_credentials(req);
     if (!creds) {
         return false;
     }
 
     auto it = cfg.users.find(creds->first);
-    return it != cfg.users.end() && it->second == creds->second;
+    if (it == cfg.users.end()) {
+        return false;
+    }
+
+    return verify_bcrypt_password(creds->second, it->second);
 }
 
 static void send_simple_response(
@@ -393,7 +489,7 @@ split_host_port(std::string s, std::string default_port) {
 }
 
 static std::optional<UpstreamTarget>
-parse_forward_target(const http::request<http::dynamic_body>& req) {
+parse_forward_target(const http::request<http::string_body>& req) {
     std::string t = sv_to_string(req.target());
 
     auto parse_absolute = [&](std::string_view scheme, std::string default_port)
@@ -472,7 +568,7 @@ static void relay_stream(tcp::socket& from, tcp::socket& to) {
 static bool handle_connect(
     tcp::socket& client,
     asio::io_context& ioc,
-    const http::request<http::dynamic_body>& req
+    const http::request<http::string_body>& req
 ) {
     auto [host, port] = split_host_port(sv_to_string(req.target()), "443");
     if (host.empty()) {
@@ -518,7 +614,7 @@ static bool handle_connect(
 static bool handle_forward(
     tcp::socket& client,
     asio::io_context& ioc,
-    http::request<http::dynamic_body> req
+    http::request<http::string_body> req
 ) {
     auto dst = parse_forward_target(req);
     if (!dst) {
@@ -539,7 +635,7 @@ static bool handle_forward(
         tcp::socket upstream = connect_with_timeout_posix(ioc, endpoints, kUpstreamConnectTimeout);
         apply_socket_timeouts(upstream, kUpstreamReadTimeout, kUpstreamWriteTimeout);
 
-        http::request<http::dynamic_body> out{req.method(), dst->target, req.version()};
+        http::request<http::string_body> out{req.method(), dst->target, req.version()};
         out.version(req.version());
         out.keep_alive(req.keep_alive());
 
@@ -568,7 +664,7 @@ static bool handle_forward(
         http::write(upstream, out);
 
         beast::flat_buffer upstream_buffer;
-        http::response<http::dynamic_body> resp;
+        http::response<http::string_body> resp;
         http::read(upstream, upstream_buffer, resp);
 
         http::write(client, resp);
@@ -594,7 +690,7 @@ static void session(tcp::socket client, const Config& cfg) {
         apply_socket_timeouts(client, kClientReadTimeout, kClientWriteTimeout);
 
         for (;;) {
-            http::request<http::dynamic_body> req;
+            http::request<http::string_body> req;
             boost::system::error_code ec;
             http::read(client, buffer, req, ec);
 

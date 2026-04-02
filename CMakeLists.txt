@@ -9,5 +9,9 @@ set(Boost_NO_BOOST_CMAKE ON)
 find_package(Boost REQUIRED COMPONENTS system)
 
 add_executable(proxy-cpp main.cpp)
-target_link_libraries(proxy-cpp PRIVATE Boost::system pthread)
+find_library(CRYPT_LIBRARY NAMES crypt)
+if(NOT CRYPT_LIBRARY)
+    message(FATAL_ERROR "libcrypt not found. ...")
+endif()
+target_link_libraries(proxy-cpp PRIVATE Boost::system pthread ${CRYPT_LIBRARY})
 

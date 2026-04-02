@@ -1,6 +1,29 @@
 services:
   proxy:
     image: proxy-cpp
+    volumes:
+      - ./proxy.conf:/etc/proxy-cpp/proxy.conf
+      - ./users.auth:/etc/proxy-cpp/users.auth
     ports:
       - "3128:3128"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+        compress: "true"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - |
+          curl -sf --max-time 5 \
+               -o /dev/null -w "%{http_code}" \
+               -x "http://${PROXY_USER}:${PROXY_PASS}@127.0.0.1:3128" \
+               http://httpbin.org/get \
+          | grep -qE "^(200)$"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
 
