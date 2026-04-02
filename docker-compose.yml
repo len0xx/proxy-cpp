@@ -1,12 +1,16 @@
 services:
   proxy:
-    image: proxy-cpp
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: proxy-cpp
     restart: unless-stopped
     volumes:
-      - ./proxy.conf:/etc/proxy-cpp/proxy.conf
-      - ./users.auth:/etc/proxy-cpp/users.auth
+      - ./proxy.conf:/etc/proxy-cpp/proxy.conf:ro
+      - ./users.auth:/etc/proxy-cpp/users.auth:ro
     ports:
-      - "3128:3128"
+      - "8043:8043"
     logging:
       driver: json-file
       options:
@@ -19,7 +23,7 @@ services:
         - |
           curl -sf --max-time 5 \
                -o /dev/null -w "%{http_code}" \
-               -x "http://${PROXY_USER}:${PROXY_PASS}@127.0.0.1:3128" \
+               -x "http://${PROXY_USER}:${PROXY_PASS}@127.0.0.1:8043" \
                http://httpbin.org/get \
           | grep -qE "^(200)$"
       interval: 30s

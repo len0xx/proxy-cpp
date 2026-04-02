@@ -39,14 +39,14 @@ A lightweight, multithreaded HTTP/HTTPS forward proxy written in modern C++20 us
 
 ```ini
 listen=0.0.0.0
-port=3128
+port=8043
 password_file=/etc/proxy-cpp/users.bcrypt
 ```
 
 | Key | Default | Description |
 | :-- | :-- | :-- |
 | `listen` | `0.0.0.0` | Bind address |
-| `port` | `3128` | Listen port |
+| `port` | `8043` | Listen port |
 | `password_file` | *(required)* | Path to bcrypt password file |
 
 ### `users.bcrypt`
@@ -66,7 +66,7 @@ bob:$2b$12$yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
 python3 -c "import bcrypt; print(bcrypt.hashpw(b'mypassword', bcrypt.gensalt(12)).decode())"
 
 # htpasswd (apache2-utils)
-htpasswd -bnBC 12 alice mypassword | cut -d: -f2
+htpasswd -bnBC 12 user mypassword | cut -d: -f2
 ```
 
 
@@ -97,7 +97,7 @@ cmake --build build -j$(nproc)
 ```bash
 docker build -t proxy-cpp .
 docker run -d \
-  -p 3128:3128 \
+  -p 8043:8043 \
   -v ./proxy.conf:/etc/proxy-cpp/proxy.conf:ro \
   -v ./users.bcrypt:/etc/proxy-cpp/users.bcrypt:ro \
   proxy-cpp
@@ -134,16 +134,16 @@ docker compose logs -f    # follow logs
 
 ```bash
 # Should return 407 — proxy is alive, no credentials supplied
-curl -v -x http://127.0.0.1:3128 http://httpbin.org/get
+curl -v -x http://127.0.0.1:8043 http://httpbin.org/get
 
 # Should return 200 — authenticated HTTP request
-curl -v -x http://alice:mypassword@127.0.0.1:3128 http://httpbin.org/get
+curl -v -x http://alice:mypassword@127.0.0.1:8043 http://httpbin.org/get
 
 # Should tunnel TLS correctly — authenticated HTTPS
-curl -v -x http://alice:mypassword@127.0.0.1:3128 https://httpbin.org/get
+curl -v -x http://alice:mypassword@127.0.0.1:8043 https://httpbin.org/get
 
 # Verify Proxy-Authorization is stripped before reaching upstream
-curl -s -x http://alice:mypassword@127.0.0.1:3128 http://httpbin.org/headers \
+curl -s -x http://alice:mypassword@127.0.0.1:8043 http://httpbin.org/headers \
   | grep -i proxy   # should return empty
 ```
 

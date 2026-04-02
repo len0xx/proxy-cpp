@@ -33,7 +33,7 @@ WORKDIR /app
 COPY --from=build /src/build/proxy-cpp /usr/local/bin/proxy-cpp
 COPY --from=build /src/proxy.conf /etc/proxy-cpp/proxy.conf
 
-EXPOSE 3128
+EXPOSE 8043
 
 ENTRYPOINT ["/usr/local/bin/proxy-cpp"]
 CMD ["/etc/proxy-cpp/proxy.conf"]
