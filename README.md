@@ -12,7 +12,7 @@ A lightweight, multithreaded HTTP/HTTPS forward proxy written in modern C++20 us
 - Thread-safe password verification via `crypt_r(3)` with constant-time comparison
 - Per-connection socket timeouts (read, write, tunnel idle)
 - `Proxy-Authorization` and `Proxy-Connection` headers stripped before upstream forwarding
-- Docker multi-stage build targeting Ubuntu 24.04
+- Docker multi-stage build targeting Alpine 3.21
 - Log rotation and healthcheck via Docker Compose
 
 ***
@@ -23,7 +23,7 @@ A lightweight, multithreaded HTTP/HTTPS forward proxy written in modern C++20 us
 .
 ├── main.cpp             # Proxy source
 ├── CMakeLists.txt       # CMake build definition
-├── Dockerfile           # Multi-stage Docker build (Ubuntu 24.04)
+├── Dockerfile           # Multi-stage Docker build (Alpine 3.21)
 ├── docker-compose.yml   # Compose with healthcheck + log rotation
 ├── proxy.conf           # Runtime configuration
 ├── users.bcrypt         # Bcrypt password database
@@ -76,12 +76,12 @@ htpasswd -bnBC 12 user mypassword | cut -d: -f2
 
 ### Requirements
 
-| Dependency | Version | Package (Debian/Ubuntu) |
+| Dependency | Version | Package |
 | :-- | :-- | :-- |
-| GCC/Clang | C++20 | `build-essential` |
+| GCC/Clang | C++20 | `build-base` |
 | CMake | ≥ 3.20 | `cmake` |
-| Boost | ≥ 1.74 | `libboost-system-dev` |
-| libcrypt | any | part of `libc6-dev` on 24.04 |
+| Boost | ≥ 1.74 | `boost-dev` |
+| libcrypt | any | part of `build-base` |
 
 ### Native build
 
