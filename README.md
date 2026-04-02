@@ -21,7 +21,7 @@ A lightweight, multithreaded HTTP/HTTPS forward proxy written in modern C++20 us
 
 ```
 .
-├── main.cpp       # Proxy source
+├── main.cpp             # Proxy source
 ├── CMakeLists.txt       # CMake build definition
 ├── Dockerfile           # Multi-stage Docker build (Ubuntu 24.04)
 ├── docker-compose.yml   # Compose with healthcheck + log rotation
